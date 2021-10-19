@@ -104,6 +104,24 @@ namespace SoftwareLicense.Controllers
                         }
                     }
                 }
+
+                using (SqlConnection con = new SqlConnection(conString))
+                {
+                    using (SqlBulkCopy sqlBulkCopy = new SqlBulkCopy(con))
+                    {
+                        //Set the database table name.
+                        sqlBulkCopy.DestinationTableName = "dbo.MatchingTableUploadTest";
+                        con.Open();
+                        string sql = $"DELETE FROM MatchingTableUploadTest;";
+                        SqlCommand cmd = new SqlCommand(sql, con);
+                        cmd.ExecuteNonQuery();
+                        con.Close();
+
+                        con.Open();
+                        sqlBulkCopy.WriteToServer(dt);
+                        con.Close();
+                    }
+                }
             }
             ViewBag.Message = "File Imported and excel data saved into database";
 
