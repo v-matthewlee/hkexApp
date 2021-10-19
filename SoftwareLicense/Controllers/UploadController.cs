@@ -11,8 +11,9 @@ using System.IO;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.OLE.Interop;
-using Microsoft.Office.Interop.Excel;
+using ClosedXML.Excel;
+//using Microsoft.VisualStudio.OLE.Interop;
+//using Microsoft.Office.Interop.Excel;
 
 namespace SoftwareLicense.Controllers
 {
@@ -55,67 +56,55 @@ namespace SoftwareLicense.Controllers
             //get extension
             string extension = Path.GetExtension(filename);
 
-
-            string conString = string.Empty;
-
-            switch (extension)
-            {
-                case ".xls": //Excel 97-03.
-                    conString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + filePath + ";Extended Properties='Excel 8.0;HDR=YES'";
-                    break;
-                case ".xlsx": //Excel 07 and above.
-                    conString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + filePath + ";Extended Properties='Excel 8.0;HDR=YES'";
-                    break;
-            }
-
             DataTable dt = new DataTable();
-            conString = string.Format(conString, filePath);
-
-            using (OleDbConnection connExcel = new OLEDBConnection(conString))
+            string conString = _configuration.GetConnectionString("DefaultConnection");
+            using (XLWorkbook workBook = new XLWorkbook(filePath))
             {
-                using (OleDbCommand cmdExcel = new OleDbCommand())
+                //Read the first Sheet from Excel file.
+                IXLWorksheet workSheet = workBook.Worksheet(1);
+
+                //Create a new DataTable.
+                
+
+                //Loop through the Worksheet rows.
+                bool firstRow = true;
+                foreach (IXLRow row in workSheet.Rows())
                 {
-                    using (OleDbDataAdapter odaExcel = new OleDbDataAdapter())
+                    //Use the first row to add columns to DataTable.
+                    if (firstRow)
                     {
-                        cmdExcel.Connection = connExcel;
+                        foreach (IXLCell cell in row.Cells())
+                        {
+                            dt.Columns.Add(cell.Value.ToString());
+                        }
+                        firstRow = false;
+                    }
+                    else
+                    {
+                        //Add rows to DataTable.
+                        dt.Rows.Add();
+                        int i = 0;
+                        foreach (IXLCell cell in row.Cells())
+                        {
+                            dt.Rows[dt.Rows.Count - 1][i] = cell.Value.ToString();
+                            i++;
+                        }
+                    }
 
-                        //Get the name of First Sheet.
-                        connExcel.Open();
-                        DataTable dtExcelSchema;
-                        dtExcelSchema = connExcel.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);
-                        string sheetName = dtExcelSchema.Rows[0]["TABLE_NAME"].ToString();
-                        connExcel.Close();
+                    using (SqlConnection con = new SqlConnection(conString))
+                    {
+                        using (SqlBulkCopy sqlBulkCopy = new SqlBulkCopy(con))
+                        {
+                            //Set the database table name.
+                            sqlBulkCopy.DestinationTableName = "dbo.MatchingTableUploadTest";
 
-                        //Read Data from First Sheet.
-                        connExcel.Open();
-                        cmdExcel.CommandText = "SELECT * From [" + sheetName + "]";
-                        odaExcel.SelectCommand = cmdExcel;
-                        odaExcel.Fill(dt);
-                        connExcel.Close();
+                            con.Open();
+                            sqlBulkCopy.WriteToServer(dt);
+                            con.Close();
+                        }
                     }
                 }
             }
-            //your database connection string
-            conString = _configuration.GetConnectionString("DefaultConnection");
-
-            using (SqlConnection con = new SqlConnection(conString))
-            {
-                using (SqlBulkCopy sqlBulkCopy = new SqlBulkCopy(con))
-                {
-                    //Set the database table name.
-                    sqlBulkCopy.DestinationTableName = "dbo.MatchingTableUploadTest";
-
-                    // Map the Excel columns with that of the database table, this is optional but good if you do
-                    // 
-                    //sqlBulkCopy.ColumnMappings.Add("SoftwareName", "SoftwareName");
-                    //sqlBulkCopy.ColumnMappings.Add("LicenseName", "LicenseName");
-
-                    con.Open();
-                    sqlBulkCopy.WriteToServer(dt);
-                    con.Close();
-                }
-            }
-            //if the code reach here means everthing goes fine and excel data is imported into database
             ViewBag.Message = "File Imported and excel data saved into database";
 
 
