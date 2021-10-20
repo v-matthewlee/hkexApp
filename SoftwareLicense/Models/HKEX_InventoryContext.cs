@@ -55,10 +55,10 @@ namespace SoftwareLicense.Models
                 entity.HasNoKey();
             });
 
-            modelBuilder.Entity<SoftwareFilterList>(entity =>
-            {
-                entity.HasNoKey();
-            });
+            //modelBuilder.Entity<SoftwareFilterList>(entity =>
+            //{
+            //    entity.HasNoKey();
+            //});
 
             modelBuilder.Entity<SoftwareInventory>(entity =>
             {

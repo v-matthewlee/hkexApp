@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using ClosedXML.Excel;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -9,6 +10,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 
 namespace SoftwareLicense.Controllers
@@ -18,11 +20,13 @@ namespace SoftwareLicense.Controllers
         private readonly ILogger<HomeController> _logger;
         private readonly HKEX_InventoryContext _context;
         private IConfiguration _configuration;
+        private List<SoftwareLicenseDiscrepancy> _softwareLicenseDiscrepancyList;
         public HomeController(ILogger<HomeController> logger, HKEX_InventoryContext context, IConfiguration configuration)
         {
             _logger = logger;
             _context = context;
             _configuration = configuration;
+            _softwareLicenseDiscrepancyList = new List<SoftwareLicenseDiscrepancy>();
         }
 
         public async Task<IActionResult> Index()
@@ -31,32 +35,49 @@ namespace SoftwareLicense.Controllers
             return View();
         }
 
-        public async Task<IActionResult> QueryDiscrepancy()
+        public async Task<IActionResult> QueryDiscrepancy(string searchString)
         {
-            var list = new List<SoftwareLicenseDiscrepancy>();
-            string conString = _configuration.GetConnectionString("DefaultConnection");
-            using (var con = new SqlConnection(conString))
-            using (var command = new SqlCommand("GetSoftwareLicenseDiscrepancy", con)
-            {
-                CommandType = CommandType.StoredProcedure
-            })
-            {
-                command.CommandTimeout = 600;
-                await con.OpenAsync();
-                using (SqlDataReader reader = await command.ExecuteReaderAsync())
+            ViewData["CurrentFilter"] = searchString;
+
+            
+                string conString = _configuration.GetConnectionString("DefaultConnection");
+                using (var con = new SqlConnection(conString))
+                using (var command = new SqlCommand("GetSoftwareLicenseDiscrepancy", con)
                 {
-                    while (await reader.ReadAsync())
+                    CommandType = CommandType.StoredProcedure
+                })
+                {
+                    command.CommandTimeout = 600;
+                    await con.OpenAsync();
+                    using (SqlDataReader reader = await command.ExecuteReaderAsync())
                     {
-                        list.Add(new SoftwareLicenseDiscrepancy()
+                        while (await reader.ReadAsync())
                         {
-                            ComputerName = await reader.GetFieldValueAsync<string>(0),
-                            SoftwareName = await reader.GetFieldValueAsync<string>(1),
-                        });
+                            _softwareLicenseDiscrepancyList.Add(new SoftwareLicenseDiscrepancy()
+                            {
+                                ComputerName = await reader.GetFieldValueAsync<string>(0),
+                                SoftwareName = await reader.GetFieldValueAsync<string>(1),
+                            });
+                        }
                     }
+                    await con.CloseAsync();
                 }
-                await con.CloseAsync();
+
+            var wb = new XLWorkbook();
+            var ws = wb.Worksheets.Add("Data_Test_Worksheet");
+            
+
+            PropertyInfo[] properties = _softwareLicenseDiscrepancyList.First().GetType().GetProperties();
+            List<string> headerNames = properties.Select(prop => prop.Name).ToList();
+            for (int i = 0; i < headerNames.Count; i++)
+            {
+                ws.Cell(1, i + 1).Value = headerNames[i];
             }
-            return View(list);
+
+            ws.Cell(2, 1).InsertData(_softwareLicenseDiscrepancyList);
+            wb.SaveAs("Reports/QueryDiscrepancy.xlsx");
+
+            return View(_softwareLicenseDiscrepancyList);
         }
 
         public IActionResult Privacy()

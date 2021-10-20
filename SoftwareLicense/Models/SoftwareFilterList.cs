@@ -16,5 +16,8 @@ namespace SoftwareLicense.Models
         public string SoftwareType { get; set; }
         [Required]
         public string SoftwareName { get; set; }
+        [Key]
+        [Column("ID")]
+        public int Id { get; set; }
     }
 }
