@@ -13,7 +13,9 @@ namespace SoftwareLicense
     {
         public static void Main(string[] args)
         {
-            CreateHostBuilder(args).Build().Run();
+            CreateHostBuilder(args)
+                .Build()
+                .Run();
         }
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
@@ -21,6 +23,10 @@ namespace SoftwareLicense
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();
+                    webBuilder.ConfigureKestrel(options =>
+                    {
+                        options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(15);
+                    });
                 });
     }
 }
